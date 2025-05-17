@@ -1,0 +1,6 @@
+[submodule "open5gs"]
+	path = open5gs
+	url = https://github.com/Borjis131/docker-open5gs.git
+[submodule "free5gc"]
+	path = free5gc
+	url = https://github.com/free5gc/free5gc-compose.git
