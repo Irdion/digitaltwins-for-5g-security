@@ -4,3 +4,6 @@
 [submodule "free5gc"]
 	path = free5gc
 	url = https://github.com/free5gc/free5gc-compose.git
+[submodule "build/envoy"]
+	path = build/envoy
+	url = https://github.com/envoyproxy/envoy.git

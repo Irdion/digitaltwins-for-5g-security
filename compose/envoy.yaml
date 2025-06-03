@@ -1,0 +1,149 @@
+static_resources:
+  listeners:
+    - name: listener_0
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8080
+      filter_chains:
+        - filters:
+            # The HTTP Connection Manager (network filter)
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+             
+                # Routing to your primary NRF
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: backend
+                      domains: ["*"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route: 
+                            cluster: open5gs_nrf
+                            auto_host_rewrite: true
+                           
+
+                # Chain of HTTP filters
+                http_filters:
+                  - name: envoy.filters.http.buffer
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
+                      max_request_bytes: 1048576      # 1 MiB limit             
+                  # 1) Lua filter
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      default_source_code:
+                        inline_string: |
+                          function envoy_on_request(request_handle)
+                            local method = request_handle:headers():get(":method")
+                            -- default to empty string if there's no body (e.g. GET)
+                            local b = ""
+                            if method ~= "GET" then
+                              local body_buf = request_handle:body()
+                              if body_buf then
+                                b = body_buf:getBytes(0, body_buf:length())
+                              end
+                            end
+                            request_handle:streamInfo():dynamicMetadata():set("diff","req_body", b)
+                            request_handle:streamInfo():dynamicMetadata():set("diff","req_method",
+                            request_handle:headers():get(":method"))
+                            request_handle:streamInfo():dynamicMetadata():set("diff","req_path",
+                              request_handle:headers():get(":path"))
+                          end
+
+                          function envoy_on_response(response_handle)
+                            local md        = response_handle:streamInfo():dynamicMetadata():get("diff") or {}
+                            local req_body  = md["req_body"] or ""
+                            local m         = md["req_method"] or ""
+                            local p         = md["req_path"] or ""
+                            local primary   = response_handle:body():getBytes(0,
+                                                  response_handle:body():length())
+
+                              -- 1) fan-out to Free5GC NRF
+                              local free5gc_headers = {
+                                [":method"]      = m,
+                                [":scheme"]      = "http",
+                                [":path"]        = p,
+                                [":authority"]   = "nrf.free5gc.org:8000",
+                                ["content-type"] = "application/json"
+                              }
+                              local free5gc_headers, free5gc_body = response_handle:httpCall(
+                                "free5gc_nrf",
+                                free5gc_headers,
+                                req_body,
+                                5000
+                              )
+                              -- 2) POST both + request to diff_worker
+                              local diff_payload = {
+                                request = req_body,
+                                open5gs = primary,
+                                free5gc = free5gc_body
+                              }
+                              local dw_headers = {
+                                [":method"]      = "POST",
+                                [":scheme"]      = "http",
+                                [":path"]        = "/diff",
+                                [":authority"]   = "diff_worker:9000",
+                                ["content-type"] = "application/json"
+                              }
+                              response_handle:httpCall(
+                                "diff_worker",
+                                dw_headers,
+                                require("cjson").encode(diff_payload),
+                                2000
+                              )
+                              -- 3) and let the original Open5GS response flow back to the client  
+                            end
+                  # 2) The router (must be last)
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    - name: open5gs_nrf
+      connect_timeout: 5s
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      http2_protocol_options: {}
+      load_assignment:
+        cluster_name: open5gs_nrf
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: nrf.open5gs.org
+                      port_value: 80
+
+    - name: free5gc_nrf
+      connect_timeout: 5s
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: free5gc_nrf
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: nrf.free5gc.org
+                      port_value: 8000
+
+    - name: diff_worker
+      connect_timeout: 5s
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: diff_worker
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: diff.worker.local
+                      port_value: 9000
+#local b = request_handle:body():getBytes(0, request_handle:body():length())

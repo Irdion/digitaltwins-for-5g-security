@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NFProfile",
+  "type": "object",
+  "required": ["nfInstanceId", "nfType", "nfStatus"],
+  "properties": {
+    "nfInstanceId": {
+      "type": "string"
+    },
+    "nfInstanceName": {
+      "type": "string"
+    },
+    "nfType": {
+      "type": "string",
+      "enum": ["NRF", "AMF", "SMF", "UDM", "PCF", "NSSF"]
+    },
+    "nfStatus": {
+      "type": "string",
+      "enum": ["REGISTERED", "SUSPENDED", "DEREGISTERED"]
+    },
+    "heartBeatTimer": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nfServiceList": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "serviceInstanceId": { "type": "string" },
+          "apiFullVersion": { "type": "string" }
+        },
+        "required": ["serviceInstanceId"]
+      }
+    },
+    "ipv4Addresses": {
+      "type": "array",
+      "items": { "type": "string", "format": "ipv4" },
+      "minItems": 1
+    },
+    "apiFullVersion": {
+      "type": "string"
+    }
+  }
+}

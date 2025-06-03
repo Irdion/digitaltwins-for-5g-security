@@ -1,0 +1,31 @@
+PUT
+        curl --http2-prior-knowledge -X PUT \
+          http://localhost:8080/nnrf-nfm/v1/nf-instances/$NF_ID \
+          -H 'Content-Type: application/json' \
+          -d '{
+                "nfInstanceId": "'"$NF_ID"'",
+                "nfType": "UPF",
+                "nfStatus": "REGISTERED",
+                "heartBeatTimer": 120,
+                "ipv4Addresses": ["198.51.100.10"],
+                "nfServiceList": {
+                  "svc-'"$NF_ID"'": {
+                    "serviceInstanceId": "svc-'"$NF_ID"'",
+                    "serviceName": "nupf-data",
+                    "versions": [
+                      {
+                        "apiVersionInUri": "v1",
+                        "apiFullVersion":  "1.0.0"
+                      }
+                    ],
+                    "scheme": "http",
+                    "nfServiceStatus": "REGISTERED"
+                  }
+                }
+              }' | jq .
+
+GET
+
+
+
+

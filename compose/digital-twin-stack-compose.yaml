@@ -1,0 +1,132 @@
+version: "3.9"
+
+services:
+  open5gsdb:
+    container_name: open5gsdb
+    image: mongo:6
+    command: mongod --port 27018
+    networks:
+      nrf_net:
+        aliases:
+          - db.open5gs.org
+    volumes:
+      - mongo_ref_data:/data/db
+      - mongo_ref_cfg:/data/configdb
+
+  open5gs_nrf:
+    build:
+      context: "../open5gs/images/nrf"                    
+      args:
+        OPEN5GS_VERSION: v2.7.5                  
+    container_name: nrf_open5gs
+    command: >
+      /open5gs/install/etc/open5gs/nrfctl
+      -c /config/nrf.yaml
+    volumes:
+      - ../open5gs/configs/basic/nrf.yaml:/config/nrf.yaml:ro
+    depends_on:
+      - open5gsdb
+    networks:  
+      nrf_net:
+        aliases:
+         - nrf.open5gs.org 
+
+  db:
+    container_name: mongodb
+    image: mongo:4.4
+    restart: unless-stopped
+    command: mongod --port 27017
+    expose:
+      - "27017"
+    volumes:
+      - mongo_alt_data:/data/db
+    networks:
+      nrf_net:
+        aliases:
+          - db
+
+  free5gc_nrf:
+    hostname: nrf.free5gc.org
+    build:
+      context: "../free5gc/nf_nrf"               
+    container_name: nrf_free5gc
+    entrypoint: /free5gc/nrf
+    command: -c /free5gc/config/nrfcfg.yaml
+    volumes:
+      - ../free5gc/config:/free5gc/config
+    depends_on:
+      - db
+    networks: 
+      nrf_net: 
+       aliases:
+          - nrf.free5gc.org
+
+  proxy:
+    build:
+      context: .
+    container_name: nrf_proxy
+    depends_on: [open5gs_nrf, free5gc_nrf, diff_worker]
+    ports:
+      - "8080:8080"       
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    networks: [nrf_net]
+
+  diff_worker:
+    container_name: diff_worker
+    build:
+      context: ../diff_worker
+    ports:
+      - "9000:9000"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - redis
+    networks:
+      nrf_net:
+        aliases:
+          - diff.worker.local
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      [nrf_net]
+
+  injector:
+    build:
+      context: ../injector
+    ports:
+      - "7100:7100"
+    environment:
+      ENVOY_HOST: proxy
+      ENVOY_PORT: 8080
+    depends_on:
+      - proxy
+    networks: [nrf_net]
+
+  diff_service: 
+    build:
+      context: ../diff_service
+    ports:
+     - "9100:9100"
+    depends_on:
+      - redis
+      - diff_worker
+    networks:
+      nrf_net:
+        aliases:
+          - diff_service
+
+
+networks:
+  nrf_net:
+    external: true        
+
+volumes:
+  mongo_ref_data:
+  mongo_ref_cfg:
+  mongo_alt_data:

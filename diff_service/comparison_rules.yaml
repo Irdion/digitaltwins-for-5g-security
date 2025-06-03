@@ -1,0 +1,36 @@
+rules:
+  - path: nfInstanceId
+    compare: exact
+    required: true
+    severity: critical
+
+  - path: nfType
+    compare: exact
+    required: true
+    severity: critical
+
+  - path: nfStatus
+    compare: exact
+    required: true
+    severity: critical
+
+  - path: heartBeatTimer
+    compare: numeric_tolerance
+    epsilon: 1000
+    required: true
+    severity: moderate
+
+  - path: nfServiceList
+    compare: ignore 
+    required: falsebnh,m 
+    severity: low
+
+  - path: apiFullVersion
+    compare: ignore
+    required: false
+    severity: low
+
+  - path: ipv4Addresses
+    compare: set_equality
+    required: true
+    severity: low
