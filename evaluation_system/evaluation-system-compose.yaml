@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  # ────────────────────────────
+  # 1  Workload generator (Locust)
+  # ────────────────────────────
+  locust-master:
+    build: 
+      context: ../evaluation_system/locust
+    volumes:
+      - ../evaluation_system/locust/locust.py:/mnt/locust/locust.py
+    command: >
+      -f /mnt/locust/locust.py
+      --master --expect-workers 1
+    environment:
+      TARGET_HOST: "http://localhost:7100"
+      ATTACK_RATE: "0.10"           # 10 % tampered requests
+      REDIS_URL: "redis://redis:6379/0"
+    ports:
+      - "8089:8089"                 # Locust Web UI
+    networks: [nrf_net]
+
+  locust-worker:
+    build: 
+      context: ../evaluation_system/locust
+    volumes:
+      - ../evaluation_system/locust/locust.py:/mnt/locust/locust.py
+    command: >
+      -f /mnt/locust/locust.py
+      --worker --master-host locust-master
+    environment:
+      TARGET_HOST: "http://localhost:7100"
+      ATTACK_RATE: "0.10"
+      REDIS_URL: "redis://redis:6379/0"
+    networks: [nrf_net]
+
+  # ────────────────────────────
+  # 2  Metrics stack (Prometheus + Grafana)
+  # ────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ../evaluation_system/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks: [nrf_net]
+
+  grafana:
+    image: grafana/grafana:latest
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_USERS_DEFAULT_THEME: "light"
+    volumes:
+      - ../evaluation_system/grafana/provisioning:/etc/grafana/provisioning
+      - ../evaluation_system/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3001:3000"                 
+    networks: [nrf_net]
+
+
+networks:
+  nrf_net:
+    external: true

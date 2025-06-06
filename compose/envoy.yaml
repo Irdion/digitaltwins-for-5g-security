@@ -63,6 +63,17 @@ static_resources:
                             local primary   = response_handle:body():getBytes(0,
                                                   response_handle:body():length())
 
+                            local tamper_header = response_handle:headers():get("x-tamper")
+                            local should_tamper = (tamper_header == "1")
+
+                            local tampered_body = req_body
+                            if should_tamper then
+                              local ok, obj = pcall(cjson.decode, req_body)
+                              if ok and obj.ipv4Addresses and #obj.ipv4Addresses > 0 then
+                                  obj.ipv4Addresses[1] = "203.0.113.250"
+                                  tampered_body = cjson.encode(obj)
+                              end
+                            end
                               -- 1) fan-out to Free5GC NRF
                               local free5gc_headers = {
                                 [":method"]      = m,
@@ -74,7 +85,7 @@ static_resources:
                               local free5gc_headers, free5gc_body = response_handle:httpCall(
                                 "free5gc_nrf",
                                 free5gc_headers,
-                                req_body,
+                                tampered_body,
                                 5000
                               )
                               -- 2) POST both + request to diff_worker
