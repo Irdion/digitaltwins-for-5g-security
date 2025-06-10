@@ -4,7 +4,7 @@ import json
 from flask import Flask, request, Response
 import httpx
 from flask_cors import CORS
-
+from prometheus_flask_exporter import PrometheusMetrics
 
 # Configuration: Envoy address (service name in Docker Compose) + port
 ENVOY_HOST = os.getenv("ENVOY_HOST", "proxy")
@@ -16,6 +16,7 @@ DW_PORT = int(os.getenv("DIFF_WORKER_PORT", 9000))
 DIFF_URL       = f"http://{DW_HOST}:{DW_PORT}/diffs/latest?count=1"
 
 app = Flask(__name__)
+metrics = PrometheusMetrics(app) 
 CORS(app)
 # HTTP/2 client via httpx
 client = httpx.Client(http2=True, base_url=API_ROOT)

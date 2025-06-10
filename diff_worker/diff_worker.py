@@ -1,6 +1,7 @@
 import os, json, logging
 from flask import Flask, request, Response
 import redis
+from prometheus_flask_exporter import PrometheusMetrics
 
 logging.basicConfig(level=logging.INFO)
 
@@ -11,6 +12,7 @@ REDIS_KEY  = os.getenv('REDIS_KEY', 'diffs')
 
 # Initialize Flask and Redis
 app = Flask(__name__)
+metrics = PrometheusMetrics(app)
 app.logger.setLevel(logging.INFO)
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
 

@@ -21,16 +21,23 @@ export default function DiffFeed({ refreshTrigger }) {
     return <Typography>No diffs yet.</Typography>;
   }
 
-  // We only care about the first (latest) diff
+  function safeJSON(txt) {
+    if (!txt) return {};            // empty string → empty object
+    try {
+      return JSON.parse(txt);
+    } catch (err) {
+      return { _error: true, raw: txt }; // keeps raw text for debugging
+    }
+  }
+  
   const raw = diffs[0].diff || diffs[0];
 
-  // Parse the three JSON-string fields
   const parts = {
-    Request:    JSON.parse(raw.request),
-    Open5GS:    JSON.parse(raw.open5gs),
-    Free5GC:    JSON.parse(raw.free5gc),
+    Request:  safeJSON(raw.request),
+    Open5GS:  safeJSON(raw.open5gs),
+    Free5GC:  safeJSON(raw.free5gc),
   };
-
+ 
   return (
     <Box
       sx={{

@@ -3,3 +3,5 @@ redis
 deepdiff
 jsonschema
 pyyaml
+prometheus-client
+prometheus-flask-exporter

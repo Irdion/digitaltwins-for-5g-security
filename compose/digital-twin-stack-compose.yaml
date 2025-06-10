@@ -71,6 +71,9 @@ services:
     volumes:
       - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
     networks: [nrf_net]
+    labels:
+      - "metrics.scrape=true"
+      - "metrics.port=8080"
 
   diff_worker:
     container_name: diff_worker
@@ -87,6 +90,9 @@ services:
       nrf_net:
         aliases:
           - diff.worker.local
+    labels:
+      - "metrics.scrape=true"
+      - "metrics.port=9000"
 
   redis:
     image: redis:7-alpine
@@ -107,6 +113,9 @@ services:
     depends_on:
       - proxy
     networks: [nrf_net]
+    labels:
+      - "metrics.scrape=true"
+      - "metrics.port=7100"
 
   diff_service: 
     build:
@@ -120,6 +129,11 @@ services:
       nrf_net:
         aliases:
           - diff_service
+    labels:
+      - "metrics.scrape=true"
+      - "metrics.port=9100"
+
+
 
 
 networks:

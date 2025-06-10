@@ -38,6 +38,7 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
                       default_source_code:
                         inline_string: |
+                          local cjson = require("cjson")
                           function envoy_on_request(request_handle)
                             local method = request_handle:headers():get(":method")
                             -- default to empty string if there's no body (e.g. GET)
@@ -53,19 +54,21 @@ static_resources:
                             request_handle:headers():get(":method"))
                             request_handle:streamInfo():dynamicMetadata():set("diff","req_path",
                               request_handle:headers():get(":path"))
+                            local tamper = request_handle:headers():get("x-tamper") or "nil"
+                            request_handle:logInfo("on_req tamper=" .. tamper)
+                            request_handle:streamInfo():dynamicMetadata():set("diff", "should_tamper", tamper)
                           end
 
                           function envoy_on_response(response_handle)
                             local md        = response_handle:streamInfo():dynamicMetadata():get("diff") or {}
+                            response_handle:logInfo("on_resp tamper flag=" .. tostring(md["should_tamper"]))
                             local req_body  = md["req_body"] or ""
                             local m         = md["req_method"] or ""
                             local p         = md["req_path"] or ""
                             local primary   = response_handle:body():getBytes(0,
                                                   response_handle:body():length())
-
-                            local tamper_header = response_handle:headers():get("x-tamper")
-                            local should_tamper = (tamper_header == "1")
-
+                            local should_tamper = (md["should_tamper"] == "1")
+                                      
                             local tampered_body = req_body
                             if should_tamper then
                               local ok, obj = pcall(cjson.decode, req_body)
@@ -74,6 +77,7 @@ static_resources:
                                   tampered_body = cjson.encode(obj)
                               end
                             end
+                            response_handle:logInfo("tampered_body=" .. tampered_body)
                               -- 1) fan-out to Free5GC NRF
                               local free5gc_headers = {
                                 [":method"]      = m,
