@@ -1,12 +1,6 @@
-"""Join ground‑truth labels with verdicts and write CSV.
-
-Run inside the analysis_service container:
-
-    python /app/tools/label_writer.py > /tmp/results.csv
-
-Assumes:
-  • Redis hashes  `truth`  and  `truth_ts`  (set by Locust)
-  • Redis pubsub channel `verdicts` (published by analysis_service)
+"""
+Subscribe to verdicts channel, correlate with ground truth, 
+and write CSV rows: nfInstanceId, malicious flag, verdict, timestamp.
 """
 
 import csv, json, os, sys, time

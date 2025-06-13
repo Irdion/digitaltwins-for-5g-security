@@ -9,8 +9,15 @@ from deepdiff import DeepDiff
 from jsonschema import Draft7Validator
 from prometheus_flask_exporter import PrometheusMetrics
 from prometheus_client import Histogram
+import threading
 
-# --- Configuration ---
+logging.basicConfig(
+    level=logging.INFO,                    
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%H:%M:%S",
+)
+
+# Configuration
 REDIS_HOST = os.getenv("REDIS_HOST", 'redis')
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 SCHEMA_PATH = "nf_profile_schema.json"
@@ -19,16 +26,49 @@ TOLERANCE = float(os.getenv("NUMERIC_TOLERANCE", 1e-6))
 STRICT_OPTIONAL = os.getenv("STRICT_OPTIONAL", "false").lower() == "true"
 MAX_DIFF_VOLUME = int(os.getenv("MAX_DIFF_VOLUME", 50))
 
-# --- Bootstrap ---
+# App & Metrics setup
 app = Flask(__name__)
 metrics = PrometheusMetrics(app)
 rdb = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
 pubsub = rdb.pubsub()
 pubsub.subscribe("diffs")
-print(rdb.pubsub_channels())
+
+# Background Listener to ensure testing results
+def _bg_listener():
+    for msg in pubsub.listen():
+        if msg["type"] != "message":
+            continue
+        try:
+            raw = json.loads(msg["data"].decode()             # bytes → str
+                             if isinstance(msg["data"], bytes)
+                             else msg["data"])
+            req   = safe_load(raw.get("request",  ""))
+            o5gs  = safe_load(raw.get("open5gs",  ""))
+            f5gc  = safe_load(raw.get("free5gc",  ""))
+            t0 = time.perf_counter()
+            latency = time.perf_counter() - t0
+            verdict, report = assess_diff(req, o5gs, f5gc)
+            VERDICT_LATENCY.observe(latency)
+            rdb.rpush("latency_raw", latency)            
+            out = {
+                "nfInstanceId": req.get("nfInstanceId"),
+                "verdict": verdict,
+                "report":  report,
+                "timestamp": int(time.time())
+            }
+            rdb.publish("verdicts", json.dumps(out))
+            logging.info("published verdict for %s", req.get("nfInstanceId"))
+
+        except Exception as exc:
+            logging.exception("Diff processing failed: %s", exc)
+
+threading.Thread(target=_bg_listener, daemon=True).start()
 
 @app.after_request
 def add_cors_headers(response):
+    """
+    Allow dashboard and clients to access this service cross-origin.
+    """
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -51,8 +91,10 @@ ALL_FIELDS = set(SCHEMA.get("properties", {}).keys())
 with open(RULES_PATH) as f:
     RULES = yaml.safe_load(f)["rules"]
 
-# --- Utility Functions ---
 def get_value_by_path(data, path):
+    """
+    Retrieve nested value via dot-separated path.
+    """
     keys = path.split(".")
     for key in keys:
         if isinstance(data, list):
@@ -61,6 +103,9 @@ def get_value_by_path(data, path):
     return data
 
 def remove_vendor_extensions(obj, schema_props=SCHEMA.get("properties", {})):
+    """
+    Recursively strip keys not defined in the JSON schema.
+    """
     if isinstance(obj, dict):
         return {
             k: remove_vendor_extensions(v, schema_props.get(k, {}))
@@ -71,6 +116,9 @@ def remove_vendor_extensions(obj, schema_props=SCHEMA.get("properties", {})):
     return obj
 
 def compare_field(val_a, val_b, rule):
+    """
+    Compare two values according to the given rule.
+    """
     comp_type = rule["compare"]
     # Handle missing values early
     if val_a is None or val_b is None:
@@ -92,6 +140,10 @@ def compare_field(val_a, val_b, rule):
     return False
 
 def assess_diff(reference, open5gs, free5gc):
+    """
+    Apply schema-based pruning, optional-field normalization, and
+    YAML-driven comparison rules to produce a verdict and diff report.
+    """
     A = remove_vendor_extensions(open5gs)
     B = remove_vendor_extensions(free5gc)
 
@@ -134,7 +186,7 @@ def assess_diff(reference, open5gs, free5gc):
 
 def safe_load(txt):
     """
-    Parse JSON, but return {} on empty string or invalid JSON.
+    Parse JSON text, returning {} on empty or invalid input.
     """
     if not txt:
         return {}
@@ -142,11 +194,13 @@ def safe_load(txt):
         return json.loads(txt)
     except json.JSONDecodeError:
         return {}
-    
-
+       
 # --- SSE Endpoint for Analysis ---
 @app.route("/analysis/latest", methods=['GET','OPTIONS'])
 def stream_analysis():
+    """
+    SSE endpoint: stream each verdict as it is published to Redis.
+    """
     headers = {
         "Content-Type":  "text/event-stream",
         "Cache-Control":  "no-cache",
@@ -164,7 +218,11 @@ def stream_analysis():
             f5gc    = safe_load(raw.get("free5gc",  ""))
             verdict, report = assess_diff(req, o5gs, f5gc)
 
-            VERDICT_LATENCY.observe(time.perf_counter() - t0)  
+            latency = time.perf_counter() - t0
+            logging.info("VERDICT_LATENCY.observe %.6f", latency)
+            VERDICT_LATENCY.observe(latency)
+
+            rdb.rpush("latency_raw", latency)
 
             out = {
                 "nfInstanceId": req.get("nfInstanceId"),

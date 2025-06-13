@@ -1,0 +1,11 @@
+compose-locust-master-1,0.11%,42.33MiB / 7.654GiB
+compose-locust-worker-1,2.75%,42.95MiB / 7.654GiB
+compose-grafana-1,0.14%,122.9MiB / 7.654GiB
+compose-injector-1,36.11%,106.4MiB / 7.654GiB
+nrf_proxy,1.98%,26.19MiB / 7.654GiB
+diff_worker,4.06%,29.43MiB / 7.654GiB
+nrf_free5gc,118.10%,67MiB / 7.654GiB
+nrf_open5gs,0.40%,8.082MiB / 7.654GiB
+redis,0.73%,20.76MiB / 7.654GiB
+mongodb,11.55%,186.1MiB / 7.654GiB
+open5gsdb,0.19%,113.8MiB / 7.654GiB

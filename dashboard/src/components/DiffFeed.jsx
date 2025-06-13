@@ -1,7 +1,13 @@
-// src/components/DiffFeed.jsx
+
 import React, { useState, useEffect } from 'react';
 import { Typography, Box } from '@mui/material';
-
+/**
+ * DiffFeed fetches the latest raw diff payload and displays
+ * request, Open5GS, and Free5GC JSON side by side.
+ *
+ * Props:
+ *  - refreshTrigger: value to re-fetch when changed.
+ */
 export default function DiffFeed({ refreshTrigger }) {
   const [diffs, setDiffs] = useState([]);
 
@@ -22,11 +28,11 @@ export default function DiffFeed({ refreshTrigger }) {
   }
 
   function safeJSON(txt) {
-    if (!txt) return {};            // empty string → empty object
+    if (!txt) return {};          
     try {
       return JSON.parse(txt);
     } catch (err) {
-      return { _error: true, raw: txt }; // keeps raw text for debugging
+      return { _error: true, raw: txt }; 
     }
   }
   
@@ -43,7 +49,7 @@ export default function DiffFeed({ refreshTrigger }) {
       sx={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: 2,           // theme spacing * 2
+        gap: 2,        
         height: '100%',
       }}
     >

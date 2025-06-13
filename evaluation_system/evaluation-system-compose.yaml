@@ -1,9 +1,6 @@
 version: "3.8"
 
 services:
-  # ────────────────────────────
-  # 1  Workload generator (Locust)
-  # ────────────────────────────
   locust-master:
     build: 
       context: ../evaluation_system/locust
@@ -14,7 +11,7 @@ services:
       --master --expect-workers 1
     environment:
       TARGET_HOST: "http://localhost:7100"
-      ATTACK_RATE: "1"           
+      ATTACK_RATE: "0.25"           
       REDIS_URL: "redis://redis:6379/0"
     ports:
       - "8089:8089"                 
@@ -30,7 +27,7 @@ services:
       --worker --master-host locust-master
     environment:
       TARGET_HOST: "http://localhost:7100"
-      ATTACK_RATE: "1"
+      ATTACK_RATE: "0.25"
       REDIS_URL: "redis://redis:6379/0"
     networks: [nrf_net]
 
@@ -57,7 +54,6 @@ services:
     ports:
       - "3001:3000"                 
     networks: [nrf_net]
-
 
 networks:
   nrf_net:

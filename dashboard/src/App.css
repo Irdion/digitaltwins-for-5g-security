@@ -41,26 +41,20 @@
   color: #888;
 }
 
-/* src/App.css */
-
-/* Outer container padding */
 .app-container {
   padding: 24px;
 }
 
-/* Dashboard title spacing */
 .app-title {
   margin-bottom: 32px;
 }
 
-/* Two-column grid */
 .dashboard-grid {
   display: flex !important;
   flex-wrap: nowrap !important;
   gap: 24px;
 }
 
-/* Base styling for both panels */
 .panel {
   flex: 1;
   min-width: 320px;
@@ -72,19 +66,15 @@
   flex-direction: column;
 }
 
-
-/* Dark-themed right panel */
 .dark-panel {
   background-color: #263238;
   color: #ECEFF1;
 }
 
-/* Panel titles */
 .panel-title {
   margin-bottom: 16px;
 }
 
-/* Ensure form and content stretch */
 .panel > *:last-child {
   flex: 1;
 }

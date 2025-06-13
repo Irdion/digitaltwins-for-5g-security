@@ -2,32 +2,36 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Chip } from '@mui/material';
 
+
+/**
+ * Displays a real-time feed of diff-worker verdicts via Server-Sent Events.
+ * Props:
+ *  - refreshTrigger: value to recreate the SSE connection when changed.
+ */
+
+
 export default function AnalysisFeed({ refreshTrigger }) {
   const [results, setResults] = useState([]);
 
   useEffect(() => {
-    // 1. open the SSE connection
     const es = new EventSource('http://localhost:9100/analysis/latest');
 
-    // 2. every time the server pushes a message, update state
     es.onmessage = (e) => {
       try {
-        const payload = JSON.parse(e.data);          // <- "data: …"
-        setResults((prev) => [payload, ...prev].slice(0, 100)); // keep last 100
+        const payload = JSON.parse(e.data);          
+        setResults((prev) => [payload, ...prev].slice(0, 100)); 
       } catch (err) {
         console.error('Malformed SSE payload', err);
       }
     };
 
-    // 3. rudimentary error-handling
     es.onerror = (err) => {
       console.error('SSE connection error', err);
-      es.close();                                    // stop reconnection attempts
+      es.close();                                    
     };
 
-    // 4. cleanup when component unmounts or refreshTrigger changes
     return () => es.close();
-  }, [refreshTrigger]);  // recreates the stream when you force a refresh
+  }, [refreshTrigger]);  
 
   if (!results.length) {
     return <Typography>No analysis results yet.</Typography>;
@@ -40,7 +44,8 @@ export default function AnalysisFeed({ refreshTrigger }) {
           key={i}
           sx={{
             p: 2,
-            bgcolor: 'grey.100',
+            bgcolor: 'grey.200',
+            color: 'text.primary',
             borderRadius: 1,
             boxShadow: 1,
             fontFamily: 'monospace',

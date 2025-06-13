@@ -1,4 +1,3 @@
-# injector/app.py
 import os
 import json
 from flask import Flask, request, Response
@@ -6,7 +5,7 @@ import httpx
 from flask_cors import CORS
 from prometheus_flask_exporter import PrometheusMetrics
 
-# Configuration: Envoy address (service name in Docker Compose) + port
+# Configuration
 ENVOY_HOST = os.getenv("ENVOY_HOST", "proxy")
 ENVOY_PORT = int(os.getenv("ENVOY_PORT", 8080))
 API_ROOT   = f"http://{ENVOY_HOST}:{ENVOY_PORT}"
@@ -18,26 +17,15 @@ DIFF_URL       = f"http://{DW_HOST}:{DW_PORT}/diffs/latest?count=1"
 app = Flask(__name__)
 metrics = PrometheusMetrics(app) 
 CORS(app)
-# HTTP/2 client via httpx
+
+# HTTP/2 client for forwarding through Envoy
 client = httpx.Client(http2=True, base_url=API_ROOT)
 
 @app.route('/api/test', methods=['POST'])
 def api_test():
     """
-    Run an arbitrary HTTP/2 request through Envoy.
-    Expects JSON payload:
-      {
-        "method": "GET",
-        "path": "/nnrf-nfm/v1/nf-instances?nf-type=UPF&limit=10",
-        "headers": {"Accept": "application/json"},
-        "body": null
-      }
-    Returns JSON:
-      {
-        "status": 200,
-        "headers": { ... },
-        "body": "..."
-      }
+    Forward a constructed HTTP/2 request through Envoy, then fetch
+    the latest diff result from the diff-service.
     """
     data    = request.get_json(force=True)
     method  = data.get('method', 'GET')
@@ -45,7 +33,6 @@ def api_test():
     headers = data.get('headers', {})
     body    = data.get('body', None)
 
-    # Forward the request through Envoy
     resp = client.request(method, path, headers=headers, content=body)
 
     result = {
@@ -64,5 +51,4 @@ def api_test():
     return Response(json.dumps(result), status=200, mimetype="application/json")
 
 if __name__ == '__main__':
-    # App listens on port 7100 for dashboard to drive tests
     app.run(host='0.0.0.0', port=7100)

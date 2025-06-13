@@ -7,13 +7,12 @@ static_resources:
           port_value: 8080
       filter_chains:
         - filters:
-            # The HTTP Connection Manager (network filter)
+            # HTTP/2 ingress entrypoint
             - name: envoy.filters.network.http_connection_manager
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: ingress_http
-             
-                # Routing to your primary NRF
+                      
                 route_config:
                   name: local_route
                   virtual_hosts:
@@ -25,14 +24,13 @@ static_resources:
                             cluster: open5gs_nrf
                             auto_host_rewrite: true
                            
-
-                # Chain of HTTP filters
                 http_filters:
+                  # Buffer entire request up to 1 MiB
                   - name: envoy.filters.http.buffer
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
                       max_request_bytes: 1048576      # 1 MiB limit             
-                  # 1) Lua filter
+                  # Capture metadata and fan-out to secondary + diff-worker
                   - name: envoy.filters.http.lua
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
@@ -113,7 +111,7 @@ static_resources:
                               )
                               -- 3) and let the original Open5GS response flow back to the client  
                             end
-                  # 2) The router (must be last)
+                  # Final routing to primary cluster
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -161,4 +159,3 @@ static_resources:
                     socket_address:
                       address: diff.worker.local
                       port_value: 9000
-#local b = request_handle:body():getBytes(0, request_handle:body():length())
