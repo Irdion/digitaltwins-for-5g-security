@@ -7,13 +7,12 @@ static_resources:
           port_value: 8080
       filter_chains:
         - filters:
-            # The HTTP Connection Manager (network filter)
+            # HTTP/2 ingress entrypoint
             - name: envoy.filters.network.http_connection_manager
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: ingress_http
-             
-                # Routing to your primary NRF
+                      
                 route_config:
                   name: local_route
                   virtual_hosts:
@@ -25,19 +24,19 @@ static_resources:
                             cluster: open5gs_nrf
                             auto_host_rewrite: true
                            
-
-                # Chain of HTTP filters
                 http_filters:
+                  # Buffer entire request up to 1 MiB
                   - name: envoy.filters.http.buffer
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
                       max_request_bytes: 1048576      # 1 MiB limit             
-                  # 1) Lua filter
+                  # Capture metadata and fan-out to secondary + diff-worker
                   - name: envoy.filters.http.lua
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
                       default_source_code:
                         inline_string: |
+                          local cjson = require("cjson")
                           function envoy_on_request(request_handle)
                             local method = request_handle:headers():get(":method")
                             -- default to empty string if there's no body (e.g. GET)
@@ -53,16 +52,30 @@ static_resources:
                             request_handle:headers():get(":method"))
                             request_handle:streamInfo():dynamicMetadata():set("diff","req_path",
                               request_handle:headers():get(":path"))
+                            local tamper = request_handle:headers():get("x-tamper") or "nil"
+                            request_handle:logInfo("on_req tamper=" .. tamper)
+                            request_handle:streamInfo():dynamicMetadata():set("diff", "should_tamper", tamper)
                           end
 
                           function envoy_on_response(response_handle)
                             local md        = response_handle:streamInfo():dynamicMetadata():get("diff") or {}
+                            response_handle:logInfo("on_resp tamper flag=" .. tostring(md["should_tamper"]))
                             local req_body  = md["req_body"] or ""
                             local m         = md["req_method"] or ""
                             local p         = md["req_path"] or ""
                             local primary   = response_handle:body():getBytes(0,
                                                   response_handle:body():length())
-
+                            local should_tamper = (md["should_tamper"] == "1")
+                                      
+                            local tampered_body = req_body
+                            if should_tamper then
+                              local ok, obj = pcall(cjson.decode, req_body)
+                              if ok and obj.ipv4Addresses and #obj.ipv4Addresses > 0 then
+                                  obj.ipv4Addresses[1] = "203.0.113.250"
+                                  tampered_body = cjson.encode(obj)
+                              end
+                            end
+                            response_handle:logInfo("tampered_body=" .. tampered_body)
                               -- 1) fan-out to Free5GC NRF
                               local free5gc_headers = {
                                 [":method"]      = m,
@@ -74,7 +87,7 @@ static_resources:
                               local free5gc_headers, free5gc_body = response_handle:httpCall(
                                 "free5gc_nrf",
                                 free5gc_headers,
-                                req_body,
+                                tampered_body,
                                 5000
                               )
                               -- 2) POST both + request to diff_worker
@@ -98,7 +111,7 @@ static_resources:
                               )
                               -- 3) and let the original Open5GS response flow back to the client  
                             end
-                  # 2) The router (must be last)
+                  # Final routing to primary cluster
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -146,4 +159,3 @@ static_resources:
                     socket_address:
                       address: diff.worker.local
                       port_value: 9000
-#local b = request_handle:body():getBytes(0, request_handle:body():length())

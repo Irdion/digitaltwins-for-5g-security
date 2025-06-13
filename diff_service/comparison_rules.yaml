@@ -22,7 +22,7 @@ rules:
 
   - path: nfServiceList
     compare: ignore 
-    required: falsebnh,m 
+    required: false 
     severity: low
 
   - path: apiFullVersion
@@ -31,6 +31,6 @@ rules:
     severity: low
 
   - path: ipv4Addresses
-    compare: set_equality
+    compare: exact
     required: true
-    severity: low
+    severity: critical

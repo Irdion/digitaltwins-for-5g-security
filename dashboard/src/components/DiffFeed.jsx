@@ -1,7 +1,13 @@
-// src/components/DiffFeed.jsx
+
 import React, { useState, useEffect } from 'react';
 import { Typography, Box } from '@mui/material';
-
+/**
+ * DiffFeed fetches the latest raw diff payload and displays
+ * request, Open5GS, and Free5GC JSON side by side.
+ *
+ * Props:
+ *  - refreshTrigger: value to re-fetch when changed.
+ */
 export default function DiffFeed({ refreshTrigger }) {
   const [diffs, setDiffs] = useState([]);
 
@@ -21,22 +27,29 @@ export default function DiffFeed({ refreshTrigger }) {
     return <Typography>No diffs yet.</Typography>;
   }
 
-  // We only care about the first (latest) diff
+  function safeJSON(txt) {
+    if (!txt) return {};          
+    try {
+      return JSON.parse(txt);
+    } catch (err) {
+      return { _error: true, raw: txt }; 
+    }
+  }
+  
   const raw = diffs[0].diff || diffs[0];
 
-  // Parse the three JSON-string fields
   const parts = {
-    Request:    JSON.parse(raw.request),
-    Open5GS:    JSON.parse(raw.open5gs),
-    Free5GC:    JSON.parse(raw.free5gc),
+    Request:  safeJSON(raw.request),
+    Open5GS:  safeJSON(raw.open5gs),
+    Free5GC:  safeJSON(raw.free5gc),
   };
-
+ 
   return (
     <Box
       sx={{
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: 2,           // theme spacing * 2
+        gap: 2,        
         height: '100%',
       }}
     >

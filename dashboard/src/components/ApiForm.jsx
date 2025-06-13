@@ -8,6 +8,13 @@ import {
   Box
 } from '@mui/material';
 
+/**
+ * TestForm allows crafting and submitting an NRF registration payload.
+ *
+ * Props:
+ * - onSubmitDone: callback invoked after successful submission.
+ */
+
 export default function TestForm({ onSubmitDone }) {
   const [nfInstanceId, setNfInstanceId]     = useState('');
   const [nfType, setNfType]                 = useState('UPF');
